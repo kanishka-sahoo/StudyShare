@@ -5,10 +5,12 @@ import {
   Scripts,
   ScrollRestoration,
   useLoaderData,
+  Form,
 } from "@remix-run/react";
 import type { LinksFunction, LoaderFunction } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { createClient } from "./utils/supabase.server";
+import { useState } from "react";
 
 import "./tailwind.css";
 
@@ -25,13 +27,33 @@ export const links: LinksFunction = () => [
   },
 ];
 
+declare global {
+  interface Window {
+    env: {
+      SUPABASE_URL: string;
+      SUPABASE_ANON_KEY: string;
+    };
+  }
+}
+
 export const loader: LoaderFunction = async ({ request }) => {
   const { supabase, response } = createClient(request);
   const {
     data: { session },
   } = await supabase.auth.getSession();
 
-  return json({ session }, { headers: response.headers });
+  return json(
+    {
+      session,
+      env: {
+        SUPABASE_URL: process.env.SUPABASE_URL!,
+        SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY!,
+      },
+    },
+    {
+      headers: response.headers,
+    }
+  );
 };
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -54,7 +76,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 function Header() {
   const { session } = useLoaderData<typeof loader>();
-  
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   return (
     <header className="bg-white shadow-sm">
       <nav className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8" aria-label="Top">
@@ -78,12 +101,38 @@ function Header() {
                 >
                   Upload Material
                 </a>
-                <a
-                  href="/profile"
-                  className="text-sm font-semibold leading-6 text-gray-900"
-                >
-                  Profile
-                </a>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="flex rounded-full bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    onClick={() => setIsMenuOpen(!isMenuOpen)}
+                  >
+                    <img
+                      className="h-8 w-8 rounded-full"
+                      src={session.user.user_metadata.avatar_url || "/default-avatar.png"}
+                      alt=""
+                    />
+                  </button>
+
+                  {isMenuOpen && (
+                    <div className="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                      <a
+                        href="/profile"
+                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        Your Profile
+                      </a>
+                      <Form action="/logout" method="post">
+                        <button
+                          type="submit"
+                          className="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          Sign Out
+                        </button>
+                      </Form>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <a
@@ -101,8 +150,15 @@ function Header() {
 }
 
 export default function App() {
+  const { env } = useLoaderData<typeof loader>();
+
   return (
     <div className="min-h-full">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `window.env = ${JSON.stringify(env)}`,
+        }}
+      />
       <Header />
       <main>
         <div className="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
